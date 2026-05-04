@@ -1,5 +1,7 @@
 #### Usage
 
+这些模型有很多乱七八糟的限制，有的能用 json format | thinking | search 有的不能用，看着办吧至少把形式统一了，用不了再调整模型和参数配置。
+
 ```python
 from uni_api import call
 
