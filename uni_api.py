@@ -2,8 +2,11 @@ from openai import OpenAI
 import os, datetime
 
 def client(api_key_prefix: str, base_url: str):
+    api_key = os.getenv(f'{api_key_prefix}_API_KEY')
+    if api_key is None:
+        raise ValueError(f'{api_key_prefix}_API_KEY 未配置')
     return OpenAI(
-        api_key=os.getenv(f'{api_key_prefix}_API_KEY'),
+        api_key=api_key,
         base_url=base_url
     )
 
@@ -80,7 +83,7 @@ def call(
     temperature: int = None,
     stream: bool = False,
     logprobs: bool = False,
-):
+) -> dict:
     """
     设计迭代：
     1. 通过读取各个 api 文档来得知可以配置哪些内容
@@ -134,12 +137,14 @@ def call(
             stream_options={"include_usage": True} if stream else None,
         )
 
-    elif model_name.startswith('seed'):
+    elif model_name.startswith('doubao'):
         # ── Seed / 豆包（火山方舟）────────────────────────────────────────
         # thinking → extra_body={"thinking": {"type": "enabled"/"disabled"/"auto"}}
         # tools    → 标准顶层参数
         # enable_search: 火山方舟 Chat API 不支持联网，需走 bot 应用，此处忽略
         extra = {}
+        if enable_search:
+            raise ValueError('火山方舟 Chat API 不支持联网搜索功能')
         if enable_thinking:
             thinking_types = {0: 'auto', 1: 'auto', 2: 'enabled', 3: 'enabled'}
             extra['thinking'] = {'type': thinking_types[thinking_level]}
@@ -171,7 +176,9 @@ def call(
             }
         else:
             extra_kwargs = {
-                'thinking': {'type': 'disabled'}
+                'extra_body': {
+                    'thinking': {'type': 'disabled'}
+                }
             }
 
         response = client(
@@ -230,3 +237,6 @@ def call(
     }
 
     return retval
+
+if __name__ == '__main__':
+    print('不要执行这个文件')
