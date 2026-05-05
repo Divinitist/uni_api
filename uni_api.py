@@ -14,6 +14,16 @@ _QWEN_THINKING_BUDGET    = {0: 0,      1: 1024, 2: 8192,  3: 38912}
 _DEEPSEEK_REASONING_EFFORT = {1: 'high', 2: 'high', 3: 'max'}
 _GEMINI_REASONING_EFFORT = {0: "none", 1: "low", 2: "medium", 3: "high"}
 
+from PIL import Image
+import base64, mimetypes, io
+
+def _encode_local_image(path: str, max_size: int = 1024, quality: int = 85) -> str:
+    img = Image.open(path)
+    img.thumbnail((max_size, max_size))
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=quality)
+    return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
+
 def _build_content(content: str | list) -> str | list:
     if isinstance(content, str):
         return content
@@ -31,11 +41,7 @@ def _build_content(content: str | list) -> str | list:
                 if raw_url.startswith(('http://', 'https://')):
                     url = raw_url
                 else:
-                    # 本地路径，读取并转 base64
-                    import base64, mimetypes
-                    mime = mimetypes.guess_type(raw_url)[0] or 'image/jpeg'
-                    with open(raw_url, 'rb') as f:
-                        url = f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
+                    url = _encode_local_image(raw_url)
             else:
                 raise ValueError("image block 需要提供 'url' 或 'base64' 字段")
             result.append({'type': 'image_url', 'image_url': {'url': url}})
