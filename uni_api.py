@@ -15,40 +15,30 @@ _DEEPSEEK_REASONING_EFFORT = {1: 'high', 2: 'high', 3: 'max'}
 _GEMINI_REASONING_EFFORT = {0: "none", 1: "low", 2: "medium", 3: "high"}
 
 def _build_content(content: str | list) -> str | list:
-    """
-    将自定义多模态格式转换为 OpenAI 标准 content 格式。
-    输入：
-      - str：纯文本，直接透传
-      - list：多模态块列表，格式为
-          [
-            {'type': 'text',  'content': 'xxx'},
-            {'type': 'image', 'url': 'xxx'},        # 网络图片 URL
-            {'type': 'image', 'base64': 'xxx', 'mime': 'image/jpeg'},  # base64
-          ]
-    输出：OpenAI 标准 content（str 或 list of dict）
-    """
     if isinstance(content, str):
         return content
 
     result = []
     for block in content:
         if block['type'] == 'text':
-            result.append({
-                'type': 'text',
-                'text': block['content'],
-            })
+            result.append({'type': 'text', 'text': block['content']})
         elif block['type'] == 'image':
-            if 'url' in block:
-                image_url = block['url']
-            elif 'base64' in block:
+            if 'base64' in block:
                 mime = block.get('mime', 'image/jpeg')
-                image_url = f"data:{mime};base64,{block['base64']}"
+                url = f"data:{mime};base64,{block['base64']}"
+            elif 'url' in block:
+                raw_url = block['url']
+                if raw_url.startswith(('http://', 'https://')):
+                    url = raw_url
+                else:
+                    # 本地路径，读取并转 base64
+                    import base64, mimetypes
+                    mime = mimetypes.guess_type(raw_url)[0] or 'image/jpeg'
+                    with open(raw_url, 'rb') as f:
+                        url = f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
             else:
                 raise ValueError("image block 需要提供 'url' 或 'base64' 字段")
-            result.append({
-                'type': 'image_url',
-                'image_url': {'url': image_url},
-            })
+            result.append({'type': 'image_url', 'image_url': {'url': url}})
         else:
             raise ValueError(f"不支持的 content block 类型：{block['type']}")
     return result
