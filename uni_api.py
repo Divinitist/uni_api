@@ -99,8 +99,10 @@ def call(
     common = dict(
         model=model_name,
         messages=messages,
-        stream=stream,
+        # stream=stream,
     )
+    if stream is True:
+        common['stream'] = True
     if max_output_tokens is not None:
         common['max_tokens'] = max_output_tokens
     if temperature is not None:
