@@ -1,13 +1,14 @@
 from openai import OpenAI
 import os, datetime
 
-def client(api_key_prefix: str, base_url: str):
+def client(api_key_prefix: str, base_url: str, default_headers: dict = None):
     api_key = os.getenv(f'{api_key_prefix}_API_KEY')
     if api_key is None:
         raise ValueError(f'{api_key_prefix}_API_KEY 未配置')
     return OpenAI(
         api_key=api_key,
-        base_url=base_url
+        base_url=base_url,
+        default_headers=default_headers
     )
 
 _QWEN_THINKING_BUDGET    = {0: 0,      1: 1024, 2: 8192,  3: 38912}
@@ -152,7 +153,8 @@ def call(
 
         response = client(
             'DASHSCOPE',
-            'https://dashscope.aliyuncs.com/compatible-mode/v1'
+            'https://dashscope.aliyuncs.com/compatible-mode/v1',
+            default_headers={"X-DashScope-OssResourceResolve": "enable"},
         ).chat.completions.create(
             **common,
             tools=tools,
