@@ -80,7 +80,7 @@ def call(
     tools: list[dict] = None,       # 用户提供的工具列表（标准 OpenAI tools 格式）
     output_format: str = None,      # "json" 或 None（text）
     max_output_tokens: int = None,
-    temperature: int = None,
+    temperature: float = None,
     stream: bool = False,
     logprobs: bool = False,
 ) -> dict:
