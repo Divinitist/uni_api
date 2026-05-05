@@ -5,11 +5,12 @@ res = call(
     # model_name='deepseek-v4-flash',
     model_name='qwen-flash',
     messages=[
-        '你是一个秘书',
-        '搜索并告诉我新加坡今天的天气，并以json形式输出'
+        '你是一个随机数生成器',
+        '以1/2概率输出A，以1/2概率输出B，总共输出10个A或B，不要输出其他任何东西'
     ],
-    output_format='json',
+    # output_format='json',
     # enable_thinking=True,
     # enable_search=True,
+    logprobs = True,
 )
 print(res)

@@ -114,8 +114,33 @@ def call(
     # ════════════════════════════════════════════════════════════════════════
     #  各家差异化参数适配
     # ════════════════════════════════════════════════════════════════════════
+    if model_name.count('/') > 0:
+        # ── OpenRouter ─────────────────────────────────────────────────────────
+        # OpenRouter 通过标准 OpenAI 兼容接口代理多家模型
+        # thinking      → extra_body={"thinking": {"type": "enabled", "budget_tokens": N}}
+        # enable_search → extra_body={"plugins": [{"id": "web"}]}
+        # tools         → 标准顶层参数
+        extra = {}
 
-    if model_name.startswith('qwen'):
+        if enable_thinking:
+            budgets = {1: 1024, 2: 8192, 3: 38912}
+            extra['thinking'] = {
+                'type': 'enabled',
+                'budget_tokens': budgets[thinking_level],
+            }
+
+        if enable_search:
+            extra['plugins'] = [{'id': 'web'}]
+
+        response = client(
+            'OPENROUTER',
+            'https://openrouter.ai/api/v1'
+        ).chat.completions.create(
+            **common,
+            tools=tools,
+            extra_body=extra if extra else None,
+        )
+    elif model_name.startswith('qwen'):
         # ── Qwen（阿里云百炼）──────────────────────────────────────────────
         # enable_thinking / thinking_budget → extra_body（非 OpenAI 标准）
         # enable_search                     → extra_body（非 OpenAI 标准）
@@ -239,4 +264,4 @@ def call(
     return retval
 
 if __name__ == '__main__':
-    print('不要执行这个文件')
+    call()
