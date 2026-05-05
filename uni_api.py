@@ -161,7 +161,7 @@ def call(
             **common,
             tools=tools,
             extra_body=extra if extra else None,
-            stream_options={"include_usage": True} if stream else None,
+            # stream_options={"include_usage": True} if stream else None,
         )
 
     elif model_name.startswith('doubao'):
