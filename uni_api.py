@@ -17,12 +17,12 @@ _GEMINI_REASONING_EFFORT = {0: "none", 1: "low", 2: "medium", 3: "high"}
 from PIL import Image
 import base64, mimetypes, io
 
-def _encode_local_image(path: str, max_size: int = 1024, quality: int = 85) -> str:
-    img = Image.open(path)
-    img.thumbnail((max_size, max_size))
-    buf = io.BytesIO()
-    img.save(buf, format='JPEG', quality=quality)
-    return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
+def _encode_local_image(path: str) -> str:
+    import base64
+    with open(path, 'rb') as f:
+        data = base64.b64encode(f.read()).decode()
+    mime = mimetypes.guess_type(path)[0] or 'image/jpeg'
+    return f"data:{mime};base64,{data}"
 
 def _build_content(content: str | list) -> str | list:
     if isinstance(content, str):
