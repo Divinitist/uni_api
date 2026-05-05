@@ -153,7 +153,7 @@ def call(
 
         response = client(
             'DASHSCOPE',
-            'https://dashscope.aliyuncs.com/compatible-mode/v1',
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
             default_headers={"X-DashScope-OssResourceResolve": "enable"},
         ).chat.completions.create(
             **common,
