@@ -1,14 +1,13 @@
 from openai import OpenAI
 import os, datetime
 
-def client(api_key_prefix: str, base_url: str, default_headers: dict = None):
+def client(api_key_prefix: str, base_url: str):
     api_key = os.getenv(f'{api_key_prefix}_API_KEY')
     if api_key is None:
         raise ValueError(f'{api_key_prefix}_API_KEY 未配置')
     return OpenAI(
         api_key=api_key,
-        base_url=base_url,
-        default_headers=default_headers
+        base_url=base_url
     )
 
 _QWEN_THINKING_BUDGET    = {0: 0,      1: 1024, 2: 8192,  3: 38912}
@@ -18,12 +17,12 @@ _GEMINI_REASONING_EFFORT = {0: "none", 1: "low", 2: "medium", 3: "high"}
 from PIL import Image
 import base64, mimetypes, io
 
-def _encode_local_image(path: str) -> str:
-    import base64
-    with open(path, 'rb') as f:
-        data = base64.b64encode(f.read()).decode()
-    mime = mimetypes.guess_type(path)[0] or 'image/jpeg'
-    return f"data:{mime};base64,{data}"
+def _encode_local_image(path: str, max_size: int = 1024, quality: int = 85) -> str:
+    img = Image.open(path)
+    img.thumbnail((max_size, max_size))
+    buf = io.BytesIO()
+    img.save(buf, format='JPEG', quality=quality)
+    return f"data:image/jpeg;base64,{base64.b64encode(buf.getvalue()).decode()}"
 
 def _build_content(content: str | list) -> str | list:
     if isinstance(content, str):
@@ -153,8 +152,7 @@ def call(
 
         response = client(
             'DASHSCOPE',
-            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            default_headers={"X-DashScope-OssResourceResolve": "enable"},
+            'https://dashscope.aliyuncs.com/compatible-mode/v1'
         ).chat.completions.create(
             **common,
             tools=tools,
