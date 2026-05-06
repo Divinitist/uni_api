@@ -16,7 +16,7 @@ _GEMINI_REASONING_EFFORT = {0: "none", 1: "low", 2: "medium", 3: "high"}
 
 def _call_transformers(model_name: str, messages: list[dict], max_output_tokens: int = None, temperature: float = None) -> dict:
     import torch
-    from transformers import AutoProcessor, AutoModelForCausalLM
+    from transformers import AutoProcessor, AutoModelForVision2Seq
     
     # 懒加载，避免每次调用都重新加载
     if not hasattr(_call_transformers, '_cache'):
@@ -24,7 +24,7 @@ def _call_transformers(model_name: str, messages: list[dict], max_output_tokens:
     
     if model_name not in _call_transformers._cache:
         _call_transformers._cache[model_name] = (
-            AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", torch_dtype="bfloat16"),
+            AutoModelForVision2Seq.from_pretrained(model_name, device_map="auto", dtype="bfloat16"),
             AutoProcessor.from_pretrained(model_name),
         )
     model, processor = _call_transformers._cache[model_name]
