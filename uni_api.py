@@ -14,32 +14,54 @@ _QWEN_THINKING_BUDGET    = {0: 0,      1: 1024, 2: 8192,  3: 38912}
 _DEEPSEEK_REASONING_EFFORT = {1: 'high', 2: 'high', 3: 'max'}
 _GEMINI_REASONING_EFFORT = {0: "none", 1: "low", 2: "medium", 3: "high"}
 
+def _get_free_devices(min_free_gb: float = 10.0) -> list[int]:
+    import subprocess
+    result = subprocess.run(
+        ['nvidia-smi', '--query-gpu=index,memory.free', '--format=csv,noheader,nounits'],
+        capture_output=True, text=True
+    )
+    gpus = []
+    for line in result.stdout.strip().split('\n'):
+        idx, free = line.split(', ')
+        gpus.append((int(idx), int(free)))
+    gpus.sort(key=lambda x: -x[1])
+    return [g[0] for g in gpus if g[1] > min_free_gb * 1024]
+
+
 def _call_transformers(model_name: str, messages: list[dict], max_output_tokens: int = None, temperature: float = None) -> dict:
     import torch
-    from transformers import AutoProcessor, AutoModelForImageTextToText
-    
-    # 懒加载，避免每次调用都重新加载
+
     if not hasattr(_call_transformers, '_cache'):
         _call_transformers._cache = {}
-    
+
     if model_name not in _call_transformers._cache:
-        _call_transformers._cache[model_name] = (
-            AutoModelForImageTextToText.from_pretrained(model_name, device_map="auto", dtype="bfloat16"),
-            AutoProcessor.from_pretrained(model_name),
-        )
+        free_gpus = _get_free_devices()
+        if not free_gpus:
+            raise RuntimeError("没有足够空闲显存的 GPU")
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(g) for g in free_gpus)
+
+        try:
+            from transformers import AutoModelForImageTextToText, AutoProcessor
+            model = AutoModelForImageTextToText.from_pretrained(model_name, device_map="auto", dtype="bfloat16")
+        except (ValueError, ImportError):
+            from transformers import AutoModelForCausalLM, AutoProcessor
+            model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", dtype="bfloat16")
+
+        from transformers import AutoProcessor
+        processor = AutoProcessor.from_pretrained(model_name)
+        _call_transformers._cache[model_name] = (model, processor)
+
     model, processor = _call_transformers._cache[model_name]
-    
+
     text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    
-    # 检查是否有图片
+
     has_image = any(
         isinstance(msg.get('content'), list) and
         any(b.get('type') == 'image_url' for b in msg['content'])
         for msg in messages
     )
-    
+
     if has_image:
-        # 把 base64/url 还原成 PIL Image 给 processor
         from PIL import Image
         import base64, re, io, requests
         images = []
@@ -55,25 +77,24 @@ def _call_transformers(model_name: str, messages: list[dict], max_output_tokens:
                     images.append(Image.open(io.BytesIO(base64.b64decode(b64))))
                 else:
                     images.append(Image.open(io.BytesIO(requests.get(url).content)))
-        
         inputs = processor(text=[text], images=images, return_tensors="pt").to(model.device)
     else:
         inputs = processor(text=[text], return_tensors="pt").to(model.device)
-    
+
     gen_kwargs = {}
     if max_output_tokens:
         gen_kwargs['max_new_tokens'] = max_output_tokens
     if temperature:
         gen_kwargs['temperature'] = temperature
         gen_kwargs['do_sample'] = True
-    
+
     with torch.no_grad():
         outputs = model.generate(**inputs, **gen_kwargs)
-    
+
     answer = processor.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
     prompt_tokens = inputs.input_ids.shape[1]
     completion_tokens = outputs.shape[1] - prompt_tokens
-    
+
     return {
         'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'model': model_name,
