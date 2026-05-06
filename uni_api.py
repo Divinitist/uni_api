@@ -63,22 +63,33 @@ def _call_transformers(model_name: str, messages: list[dict], max_output_tokens:
 
     if has_image:
         from PIL import Image
+        from qwen_vl_utils import process_vision_info
         import base64, re, io, requests
-        images = []
+
+        # 把 image_url 格式还原成 qwen_vl_utils 能处理的格式
+        qwen_messages = []
         for msg in messages:
             if not isinstance(msg.get('content'), list):
+                qwen_messages.append(msg)
                 continue
+            new_content = []
             for block in msg['content']:
-                if block.get('type') != 'image_url':
-                    continue
-                url = block['image_url']['url']
-                if url.startswith('data:'):
-                    b64 = re.sub(r'^data:[^;]+;base64,', '', url)
-                    images.append(Image.open(io.BytesIO(base64.b64decode(b64))))
+                if block.get('type') == 'image_url':
+                    new_content.append({'type': 'image', 'image': block['image_url']['url']})
                 else:
-                    images.append(Image.open(io.BytesIO(requests.get(url).content)))
-        inputs = processor(text=[text], images=images, return_tensors="pt").to(model.device)
+                    new_content.append(block)
+            qwen_messages.append({**msg, 'content': new_content})
+
+        text = processor.apply_chat_template(qwen_messages, tokenize=False, add_generation_prompt=True)
+        image_inputs, video_inputs = process_vision_info(qwen_messages)
+        inputs = processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            return_tensors="pt"
+        ).to(model.device)
     else:
+        text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = processor(text=[text], return_tensors="pt").to(model.device)
 
     gen_kwargs = {}
