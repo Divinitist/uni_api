@@ -14,6 +14,79 @@ _QWEN_THINKING_BUDGET    = {0: 0,      1: 1024, 2: 8192,  3: 38912}
 _DEEPSEEK_REASONING_EFFORT = {1: 'high', 2: 'high', 3: 'max'}
 _GEMINI_REASONING_EFFORT = {0: "none", 1: "low", 2: "medium", 3: "high"}
 
+def _call_transformers(model_name: str, messages: list[dict], max_output_tokens: int = None, temperature: float = None) -> dict:
+    import torch
+    from transformers import AutoProcessor, AutoModelForCausalLM
+    
+    # 懒加载，避免每次调用都重新加载
+    if not hasattr(_call_transformers, '_cache'):
+        _call_transformers._cache = {}
+    
+    if model_name not in _call_transformers._cache:
+        _call_transformers._cache[model_name] = (
+            AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", torch_dtype="bfloat16"),
+            AutoProcessor.from_pretrained(model_name),
+        )
+    model, processor = _call_transformers._cache[model_name]
+    
+    text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+    
+    # 检查是否有图片
+    has_image = any(
+        isinstance(msg.get('content'), list) and
+        any(b.get('type') == 'image_url' for b in msg['content'])
+        for msg in messages
+    )
+    
+    if has_image:
+        # 把 base64/url 还原成 PIL Image 给 processor
+        from PIL import Image
+        import base64, re, io, requests
+        images = []
+        for msg in messages:
+            if not isinstance(msg.get('content'), list):
+                continue
+            for block in msg['content']:
+                if block.get('type') != 'image_url':
+                    continue
+                url = block['image_url']['url']
+                if url.startswith('data:'):
+                    b64 = re.sub(r'^data:[^;]+;base64,', '', url)
+                    images.append(Image.open(io.BytesIO(base64.b64decode(b64))))
+                else:
+                    images.append(Image.open(io.BytesIO(requests.get(url).content)))
+        
+        inputs = processor(text=[text], images=images, return_tensors="pt").to(model.device)
+    else:
+        inputs = processor(text=[text], return_tensors="pt").to(model.device)
+    
+    gen_kwargs = {}
+    if max_output_tokens:
+        gen_kwargs['max_new_tokens'] = max_output_tokens
+    if temperature:
+        gen_kwargs['temperature'] = temperature
+        gen_kwargs['do_sample'] = True
+    
+    with torch.no_grad():
+        outputs = model.generate(**inputs, **gen_kwargs)
+    
+    answer = processor.decode(outputs[0][inputs.input_ids.shape[1]:], skip_special_tokens=True)
+    prompt_tokens = inputs.input_ids.shape[1]
+    completion_tokens = outputs.shape[1] - prompt_tokens
+    
+    return {
+        'timestamp': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'model': model_name,
+        'answer': answer,
+        'thinking': None,
+        'logprobs': None,
+        'usage': {
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'total_tokens': prompt_tokens + completion_tokens,
+        }
+    }
+
 from PIL import Image
 import base64, mimetypes, io
 
@@ -121,7 +194,11 @@ def call(
     # ════════════════════════════════════════════════════════════════════════
     #  各家差异化参数适配
     # ════════════════════════════════════════════════════════════════════════
-    if model_name.count('/') > 0:
+    if model_name.count('/') > 0 and any(c.isupper() for c in model_name):
+        # HuggingFace 本地模型
+        return _call_transformers(model_name, messages, max_output_tokens, temperature)
+
+    elif model_name.count('/') > 0:
         # ── OpenRouter ─────────────────────────────────────────────────────────
         # OpenRouter 通过标准 OpenAI 兼容接口代理多家模型
         # thinking      → extra_body={"thinking": {"type": "enabled", "budget_tokens": N}}
