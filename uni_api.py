@@ -35,7 +35,7 @@ def _call_transformers(model_name: str, messages: list[dict], max_output_tokens:
         _call_transformers._cache = {}
 
     if model_name not in _call_transformers._cache:
-        free_gpus = _get_free_devices()
+        free_gpus = _get_free_devices(5)
         if not free_gpus:
             raise RuntimeError("没有足够空闲显存的 GPU")
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(g) for g in free_gpus)
