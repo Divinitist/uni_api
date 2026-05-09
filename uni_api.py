@@ -40,10 +40,10 @@ def _call_transformers(model_name: str, messages: list[dict], max_output_tokens:
 
         try:
             from transformers import AutoModelForImageTextToText, AutoProcessor
-            model = AutoModelForImageTextToText.from_pretrained(model_name, device_map="auto", dtype="bfloat16")
+            model = AutoModelForImageTextToText.from_pretrained(model_name, device_map="cuda", dtype="bfloat16")
         except (ValueError, ImportError):
             from transformers import AutoModelForCausalLM
-            model = AutoModelForCausalLM.from_pretrained(model_name, device_map="auto", dtype="bfloat16")
+            model = AutoModelForCausalLM.from_pretrained(model_name, device_map="cuda", dtype="bfloat16")
 
         from transformers import AutoProcessor
         processor = AutoProcessor.from_pretrained(model_name)
